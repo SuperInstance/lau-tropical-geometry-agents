@@ -1,48 +1,43 @@
 # lau-tropical-geometry-agents
 
-**Tropical geometry for agents — where + becomes max and × becomes +**
+**Tropical geometry for agents — where + becomes max and × becomes +.**
 
-A Rust library that implements tropical geometry over the max-plus semiring, providing tropical polynomials, Newton polytopes, tropical linear algebra, tropical curves, convexity, optimization, intersection theory, and agent scheduling. All built on the deceptively simple idea that replacing addition with `max` and multiplication with `+` reveals hidden combinatorial structure.
+A Rust library implementing the **max-plus semiring** (ℝ ∪ {−∞}, max, +) and the machinery of tropical geometry: tropical polynomials, tropical linear algebra, Newton polytopes, tropical curves, convexity, intersection theory, optimization, and agent scheduling.
 
-136 tests · 11 modules · ~3,900 LOC
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 ---
 
 ## What This Does
 
-Tropical geometry replaces classical arithmetic with **tropical arithmetic**:
+Tropical geometry replaces ordinary arithmetic with tropical arithmetic:
 
-| Classical | Tropical (max-plus) |
-|-----------|-------------------|
-| `a + b` | `max(a, b)` |
-| `a × b` | `a + b` |
-| Additive identity `0` | `-∞` |
-| Multiplicative identity `1` | `0` |
+| Operation | Usual | Tropical |
+|-----------|-------|----------|
+| Addition  | a + b | max(a, b) |
+| Multiplication | a × b | a + b |
+| Zero (additive identity) | 0 | −∞ |
+| One (multiplicative identity) | 1 | 0 |
 
-This library implements the full machinery of tropical geometry in Rust:
+This deceptively simple change transforms polynomial systems into **piecewise-linear** objects with rich combinatorial structure. Tropical polynomials become convex piecewise-linear functions; their zero sets are **tropical hypersurfaces** — polyhedral complexes that encode combinatorial type.
 
-- **Tropical semiring** — `Tropical<f64>` with max-plus arithmetic, plus the dual min-plus semiring
-- **Tropical polynomials** — piecewise-linear functions as `max` of affine terms, with evaluation, multiplication, corner locus, and simplification
-- **Newton polytopes** — convex hulls of exponent vectors, Minkowski sums, upper hulls, polyhedral subdivisions
-- **Tropical curves** — 1D polyhedral complexes from bivariate polynomials, with balancing checks and genus computation
-- **Tropical linear algebra** — matrices over the max-plus semiring with tropical determinant, eigenvalues (Karp's algorithm), eigenvectors, Kleene star
-- **Tropical convexity** — tropical polytopes, halfspaces, convex hull, containment, extreme points
-- **Tropical optimization** — solve min-max problems, linear programming over the tropical semiring
-- **Tropicalization** — transform classical polynomials to tropical via the valuation map `x ↦ -log_t(x)`
-- **Intersection theory** — stable intersections, tropical Bézout's theorem
-- **Agent scheduling** — optimal task scheduling and resource allocation via tropical matrix powers and critical path analysis
+This crate uses that machinery to:
+
+- Solve **tropical optimization** problems (shortest paths, scheduling, optimal decisions)
+- Compute with **tropical polynomials** and their Newton polytopes
+- Build and analyze **tropical curves** (skeletons of classical algebraic curves)
+- Perform **tropical linear algebra** (determinants, eigenvalues, Kleene star)
+- Schedule agents via max-plus matrix algebra
 
 ---
 
 ## Key Idea
 
-Tropical geometry is the "skeleton" of classical algebraic geometry. By replacing `+` with `max` and `×` with `+`, algebraic varieties become **piecewise-linear polyhedral complexes**. This transformation:
+In the tropical world, a polynomial like `max(a₁+x₁, a₂+x₂, …, aₙ+xₙ)` encodes a shortest-path or optimal-decision problem. The tropical semiring's idempotent addition (max(a, a) = a) means there is no "cancelation" — every term matters combinatorially. This makes tropical geometry a natural language for:
 
-1. **Simplifies computation** — polynomial systems become combinatorial optimization
-2. **Preserves structure** — the tropical skeleton encodes genus, degree, and intersection numbers
-3. **Enables optimization** — tropical matrix algebra solves longest-path and scheduling problems directly
-
-The library connects pure mathematics to practical agent systems: tropical eigenvalues give **critical path lengths** in task graphs, and tropical matrix powers compute **optimal schedules** in max-plus algebra.
+- **Optimization**: Tropical matrix multiplication is the Floyd–Warshall algorithm
+- **Scheduling**: The tropical eigenvalue of a dependency matrix gives the critical path length
+- **Agent systems**: Agent scheduling reduces to tropical matrix powers
 
 ---
 
@@ -52,20 +47,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-lau-tropical-geometry-agents = { git = "https://github.com/SuperInstance/lau-tropical-geometry-agents" }
+lau-tropical-geometry-agents = "0.1"
 ```
 
-Or from a local clone:
-
-```toml
-[dependencies]
-lau-tropical-geometry-agents = { path = "../lau-tropical-geometry-agents" }
-```
-
-### Dependencies
-
-- `serde` 1.x (with `derive`) — serialization
-- `nalgebra` 0.33 — linear algebra primitives
+Requires Rust 2021 edition. Dependencies: `nalgebra` and `serde`.
 
 ---
 
@@ -74,154 +59,133 @@ lau-tropical-geometry-agents = { path = "../lau-tropical-geometry-agents" }
 ```rust
 use lau_tropical_geometry_agents::{Tropical, TropicalPolynomial, TropicalMatrix, AgentScheduler};
 
-// Tropical arithmetic
+// --- Tropical arithmetic ---
 let a = Tropical::new(3.0);
 let b = Tropical::new(5.0);
-assert_eq!(a + b, Tropical::new(5.0)); // max(3, 5) = 5
-assert_eq!(a * b, Tropical::new(8.0)); // 3 + 5 = 8
+assert_eq!(a.tropical_add(b), Tropical::new(5.0));  // max(3, 5) = 5
+assert_eq!(a.tropical_mul(b), Tropical::new(8.0));   // 3 + 5 = 8
 
-// Tropical polynomial: max(0, x, 2x) is piecewise-linear
-let p = TropicalPolynomial::univariate(vec![
-    (0.0, 0),  // constant term: 0
-    (0.0, 1),  // linear term: x
-    (0.0, 2),  // quadratic term: 2x
+// --- Tropical polynomials ---
+let poly = TropicalPolynomial::bivariate(
+    vec![(1.0, 1, 0), (2.0, 0, 1), (0.0, 0, 0)],  // max(x + 1, y + 2, 0)
+);
+let val = poly.evaluate(&[3.0, 1.0]); // max(4, 3, 0) = 4
+
+// --- Tropical matrix (shortest paths) ---
+let dist = TropicalMatrix::from_rows(&[
+    &[0.0, 5.0, f64::NEG_INFINITY],
+    &[f64::NEG_INFINITY, 0.0, 3.0],
+    &[2.0, f64::NEG_INFINITY, 0.0],
 ]);
-let val = p.evaluate(&[Tropical::new(3.0)]);
-assert_eq!(val, Tropical::new(6.0)); // max(0, 3, 6) = 6
+let closure = dist.kleene_star(); // All-pairs shortest paths
 
-// Corner points (where the max switches)
-let corners = p.corner_points_1d();
-// All at x=0 for this symmetric polynomial
-
-// Tropical matrix and eigenvalue
-let m = TropicalMatrix::from_rows(&[
-    vec![1.0, 2.0],
-    vec![3.0, 4.0],
-]);
-let det = m.tropical_determinant(); // max(1+4, 2+3) = 5
-let eig = m.tropical_eigenvalue();   // max cycle mean via Karp's algorithm
-
-// Agent scheduling
-let mut scheduler = AgentScheduler::new(3);
-scheduler.add_task(/* ... */);
-let schedule = scheduler.solve();
+// --- Agent scheduling ---
+let mut scheduler = AgentScheduler::new(4);
+scheduler.set_duration(0, 1, 3.0); // Task 0 → Task 1 takes 3 units
+scheduler.set_duration(1, 2, 2.0);
+scheduler.set_duration(0, 2, 6.0);
+let makespan = scheduler.makespan(); // Critical path length
 ```
 
 ---
 
 ## API Reference
 
-### `semiring` — Tropical Semiring
+### `Tropical` — The Max-Plus Number Type
 
-| Type / Function | Description |
-|---|---|
-| `Tropical(f64)` | Max-plus tropical number |
-| `MinPlus(f64)` | Min-plus tropical number (dual semiring) |
-| `Tropical::ZERO` | Additive identity: `-∞` |
-| `Tropical::ONE` | Multiplicative identity: `0.0` |
-| `a + b` | Tropical addition = `max(a, b)` |
-| `a * b` | Tropical multiplication = `a + b` |
-| `a.tropical_pow(n)` | Tropical exponentiation = scalar multiply by `n` |
-| `a.tropical_div(b)` | Tropical division = ordinary subtraction |
-| `TropicalOps` trait | Generic tropical arithmetic trait |
+```rust
+pub struct Tropical(pub f64);
+```
 
-### `polynomial` — Tropical Polynomials
+| Method | Description |
+|--------|-------------|
+| `Tropical::NEG_INF` | Additive identity (−∞) |
+| `Tropical::ONE` | Multiplicative identity (0.0) |
+| `tropical_add(self, other)` | max(self, other) |
+| `tropical_mul(self, other)` | self + other |
+| `tropical_sub(self, other)` | self − other |
+| `tropical_div(self, other)` | self − other (same as sub) |
+| `tropical_pow(self, n)` | Repeated tropical multiplication = n·self |
+| `to_f64(self) → f64` | Unwrap the inner value |
 
-| Type / Function | Description |
-|---|---|
-| `TropicalPolynomial` | A tropical polynomial (max of monomials) |
-| `TropicalMonomial` | A single monomial: `coefficient + dot(degree, vars)` |
-| `TropicalPolynomial::univariate(terms)` | Create from `(coeff, degree)` pairs |
-| `TropicalPolynomial::bivariate(terms)` | Create from `(coeff, deg1, deg2)` triples |
-| `poly.evaluate(&point)` | Evaluate at a point (max of monomials) |
-| `poly.tropical_add(&other)` | Tropical polynomial addition |
-| `poly.tropical_mul(&other)` | Tropical polynomial multiplication (convolution) |
-| `poly.dominant_monomials(&point)` | Indices of monomials achieving the max |
-| `poly.corner_points_1d()` | Corner locus for univariate polynomials |
-| `poly.simplify()` | Remove dominated monomials |
+Implements `Add`, `Mul`, `Display`, `Serialize`, `Deserialize`, `PartialOrd`.
 
-### `newton` — Newton Polytopes
+### `TropicalPolynomial` — Tropical Polynomial Functions
 
-| Type / Function | Description |
-|---|---|
-| `NewtonPolytope` | Convex hull of exponent vectors |
-| `LatticePoint` | Integer lattice point |
-| `NewtonPolytope::from_polynomial(&poly)` | Extract from polynomial |
-| `np.dimension()` | Intrinsic dimension via Gaussian elimination |
-| `np.volume()` | Volume (1D: length, 2D: shoelace area) |
-| `np.upper_hull_indices(&direction)` | Upper convex hull in given direction |
-| `np.minkowski_sum(&other)` | Minkowski sum of two polytopes |
-| `PolyhedralSubdivision` | Regular subdivision induced by coefficients |
-| `TropicalHypersurface` | Corner locus of a tropical polynomial |
+```rust
+pub struct TropicalPolynomial { /* monomials with coefficients and exponents */ }
+```
 
-### `curves` — Tropical Curves
+| Method | Description |
+|--------|-------------|
+| `from_monomials(coeffs, exponents)` | Build from raw data |
+| `bivariate(terms)` | Convenience for 2-variable polynomials |
+| `evaluate(&[x₁, …, xₙ])` | Evaluate at a point |
+| `degree() → u32` | Total degree |
+| `num_variables() → usize` | Number of variables |
+| `tropical_add(&self, other)` | Pointwise max |
+| `tropical_mul(&self, other)` | Tropical convolution |
+| `corner_locus() → Vec<Vec<f64>>` | Points where two monomials tie |
 
-| Type / Function | Description |
-|---|---|
-| `TropicalCurve` | Weighted balanced 1D polyhedral complex |
-| `CurveVertex` | A vertex with coordinates |
-| `CurveEdge` | An edge with weight and direction |
-| `TropicalCurve::from_bivariate_polynomial(&poly, resolution)` | Extract curve from bivariate polynomial |
-| `curve.is_balanced_at(i)` | Check balancing condition at vertex |
-| `curve.genus()` | Genus (number of independent cycles) |
-| `curve.incident_edges(i)` | Edges incident to a vertex |
+### `NewtonPolytope` — Newton Polytope of a Polynomial
 
-### `linear_algebra` — Tropical Matrices
+| Method | Description |
+|--------|-------------|
+| `from_polynomial(&poly)` | Extract the Newton polytope |
+| `upper_hull_indices(direction)` | Upper hull facets |
+| `contains(point)` | Point-in-polytope test |
+| `volume() → f64` | Volume (2D → area) |
+| `edges()` | Edge list |
+| `minkowski_sum(other)` | Minkowski sum of polytopes |
 
-| Type / Function | Description |
-|---|---|
-| `TropicalMatrix` | Matrix over the max-plus semiring |
-| `TropicalMatrix::identity(n)` | Identity matrix (ones on diagonal) |
-| `m.tropical_mul(&other)` | Tropical matrix multiplication |
-| `m.tropical_determinant()` | Max over all permutations of diagonal sums |
-| `m.tropical_eigenvalue()` | Max cycle mean (Karp's algorithm) |
-| `m.tropical_eigenvectors(λ)` | Eigenvectors for given eigenvalue |
-| `m.kleene_star()` | Kleene star: `I ⊕ A ⊕ A² ⊕ ... ⊕ Aⁿ` |
-| `m.mul_vector(&v)` | Tropical matrix-vector product |
+### `TropicalCurve` — Skeleton Graph of a Tropical Hypersurface
 
-### `convexity` — Tropical Convexity
+| Method | Description |
+|--------|-------------|
+| `from_bivariate_polynomial(poly, resolution)` | Extract curve from polynomial |
+| `is_balanced_at(vertex)` | Check balancing condition at vertex |
+| `is_balanced()` | Check global balancing |
+| `genus() → usize` | First Betti number (number of loops) |
 
-| Type / Function | Description |
-|---|---|
-| `TropicalPolytope` | Tropical convex hull of points |
-| `TropicalHalfspace` | Halfspace defined by tropical linear inequality |
-| `polytope.contains(&point)` | Membership test |
-| `polytope.extreme_points()` | Extreme (vertex) points |
-| `polytope.intersection(&other)` | Intersection of two polytopes |
+### `TropicalMatrix` — Max-Plus Matrix Algebra
 
-### `optimization` — Tropical Optimization
+| Method | Description |
+|--------|-------------|
+| `from_rows(&[rows])` | Construct from row data |
+| `identity(n)` | Tropical identity (0 on diagonal, −∞ elsewhere) |
+| `tropical_mul(&self, other)` | Max-plus matrix multiply |
+| `tropical_pow(k)` | k-th tropical power |
+| `tropical_determinant() → Tropical` | Max of permutation products |
+| `tropical_eigenvalue() → Option<Tropical>` | Cycle mean (critical path weight) |
+| `kleene_star() → TropicalMatrix` | Transitive closure (all-pairs shortest paths) |
+| `tropical_trace() → Tropical` | max of diagonal entries |
 
-| Type / Function | Description |
-|---|---|
-| `TropicalOptimizer` | Solver for tropical optimization problems |
-| `opt.solve_linear_program()` | Tropical linear programming |
-| `opt.solve_min_max()` | Min-max optimization |
+### `TropicalPolytope` — Tropical Convexity
 
-### `tropicalization` — Classical → Tropical
+| Method | Description |
+|--------|-------------|
+| `new(generators)` | Create from generator points |
+| `contains(point)` | Membership test |
+| `tropical_distance(a, b)` | Tropical (Chebyshev-like) distance |
+| `minkowski_sum(other)` | Minkowski sum |
+| `circumscribed_ball()` | Center and radius of enclosing ball |
 
-| Type / Function | Description |
-|---|---|
-| `ClassicalTerm` | A term in a classical polynomial |
-| `tropicalize(&terms, base)` | Apply valuation map: `x ↦ -log_base(x)` |
-| `TropicalizationResult` | Result of tropicalization |
+### `TropicalOptimizer` — Tropical Optimization
 
-### `intersection` — Intersection Theory
+| Method | Description |
+|--------|-------------|
+| `shortest_path(matrix, from, to)` | Solve via tropical matrix algebra |
+| `all_pairs(&matrix)` | Kleene star (all-pairs shortest paths) |
+| `assignment_problem(cost_matrix)` | Optimal assignment via tropical determinant |
 
-| Type / Function | Description |
-|---|---|
-| `IntersectionPoint` | A point where tropical varieties meet |
-| `stable_intersection(&curve1, &curve2)` | Compute stable intersection |
-| `tropical_bezout(&p1, &p2)` | Tropical Bézout's theorem |
+### `AgentScheduler` — Agent/Task Scheduling via Tropical Algebra
 
-### `scheduling` — Agent Scheduling
-
-| Type / Function | Description |
-|---|---|
-| `AgentScheduler` | Schedule tasks across agents |
-| `Agent` | An agent in the scheduling system |
-| `scheduler.add_task(...)` | Add a task with dependencies |
-| `scheduler.solve()` | Compute optimal schedule via tropical algebra |
-| `scheduler.critical_path_length()` | Longest path (tropical eigenvalue) |
+| Method | Description |
+|--------|-------------|
+| `new(n_tasks)` | Create scheduler for n tasks |
+| `set_duration(i, j, d)` | Set duration for task i → j |
+| `makespan() → f64` | Critical path length (tropical eigenvalue) |
+| `schedule() → Vec<f64>` | Start times for each task |
 
 ---
 
@@ -229,96 +193,99 @@ let schedule = scheduler.solve();
 
 ### Architecture
 
-The library is structured as layers of increasing abstraction:
-
 ```
-semiring (Tropical number type)
-    └── polynomial (Tropical polynomials)
-        ├── newton (Newton polytopes)
-        ├── curves (Tropical curves)
-        └── tropicalization (classical → tropical)
-    └── linear_algebra (Tropical matrices)
-        ├── convexity (Tropical polytopes & halfspaces)
-        └── optimization (Tropical LP & min-max)
-            └── scheduling (Agent task scheduling)
-intersection (cross-cutting: intersection theory)
+Tropical (number type)
+  └─ TropicalPolynomial (piecewise-linear functions)
+       ├─ NewtonPolytope (combinatorial type)
+       ├─ TropicalCurve (skeleton graph)
+       └─ TropicalHypersurface (zero set)
+  └─ TropicalMatrix (max-plus linear algebra)
+       ├─ TropicalOptimizer (shortest paths, assignment)
+       └─ AgentScheduler (critical-path scheduling)
 ```
 
-### Tropical Arithmetic
+### Module Map
 
-The max-plus semiring `(ℝ ∪ {-∞}, max, +)` has these properties:
-
-- **Idempotent addition**: `max(a, a) = a` — no cancellation
-- **No additive inverse** — you can't "subtract" in the usual sense
-- **Tropical power**: `a^n = n × a` (scalar multiplication)
-- **Tropical polynomial evaluation**: `max(a₀, a₁+x, a₂+2x, ...)` — piecewise-linear
-
-### Tropical Eigenvalues via Karp's Algorithm
-
-The tropical eigenvalue of a matrix is the **maximum cycle mean** of the weighted directed graph it represents. Karp's algorithm computes this in O(n³):
-
-1. Compute `v_k[j]` = maximum weight of any path of length `k` ending at node `j`
-2. The eigenvalue is `max_j max_k (v_n[j] - v_k[j]) / (n - k)`
-
-This eigenvalue equals the **critical path length** in scheduling problems.
-
-### Tropical Curves and Balancing
-
-A tropical curve is a 1D polyhedral complex where every vertex satisfies the **balancing condition**: the weighted sum of outgoing direction vectors equals zero. This is the tropical analog of smoothness for algebraic curves.
+| Module | Contents |
+|--------|----------|
+| `semiring` | `Tropical` number type with max-plus arithmetic |
+| `polynomial` | `TropicalPolynomial` — evaluation, addition, multiplication |
+| `newton` | `NewtonPolytope`, `PolyhedralSubdivision`, `TropicalHypersurface` |
+| `curves` | `TropicalCurve` — vertices, edges, balancing, genus |
+| `linear_algebra` | `TropicalMatrix` — determinant, eigenvalue, Kleene star |
+| `convexity` | `TropicalPolytope`, `TropicalHalfspace`, distance metrics |
+| `intersection` | Tropical Bézout, stable intersection, mixed volume |
+| `tropicalization` | Degeneration from classical to tropical curves |
+| `optimization` | `TropicalOptimizer` — shortest paths, assignment |
+| `scheduling` | `AgentScheduler` — critical-path task scheduling |
 
 ---
 
 ## The Math
 
-### The Tropical Semiring
+### The Max-Plus Semiring
 
-The **max-plus semiring** is `(ℝ ∪ {-∞}, ⊕, ⊗)` where:
-- `a ⊕ b = max(a, b)` (tropical addition)
-- `a ⊗ b = a + b` (tropical multiplication)
+The **tropical semiring** is (ℝ ∪ {−∞}, ⊕, ⊗) where:
 
-The **min-plus semiring** `(ℝ ∪ {+∞}, min, +)` is its dual, useful for shortest-path problems.
+- a ⊕ b = max(a, b)
+- a ⊗ b = a + b
+- The additive identity is −∞ (denoted ⊥ or ε)
+- The multiplicative identity is 0
+
+This is also called the **max-plus algebra**. It is **idempotent**: a ⊕ a = a, meaning there is no additive inverse. This idempotence is what makes tropical geometry combinatorial — addition becomes a selection operation.
 
 ### Tropical Polynomials
 
-A tropical polynomial in `n` variables is:
+A tropical polynomial in n variables:
 
-$$P(x_1, \ldots, x_n) = \max_{\alpha} (c_\alpha + \alpha_1 x_1 + \cdots + \alpha_n x_n)$$
+> ⊕ᵢ (cᵢ ⊗ x₁^αᵢ¹ ⊗ … ⊗ xₙ^αᵢⁿ) = maxᵢ (cᵢ + αᵢ¹·x₁ + … + αᵢⁿ·xₙ)
 
-This is a **piecewise-linear convex function**. The **tropical hypersurface** is the corner locus — the set where `P` is not differentiable (where two or more monomials simultaneously achieve the maximum).
+This is a **convex piecewise-linear** function. Its "zero set" (where the maximum is achieved by at least two monomials) is the **tropical hypersurface** — a polyhedral complex dual to the Newton polytope's subdivision.
 
 ### Newton Polytopes
 
-The **Newton polytope** `New(P)` is the convex hull of the exponent vectors `{α}` in `ℝⁿ`. The tropical hypersurface induces a polyhedral subdivision of `New(P)` that is **dual** to it — vertices correspond to regions, edges to facets, faces to cells.
+The **Newton polytope** of a tropical polynomial is the convex hull of its exponent vectors. The upper convex hull, projected down, gives the tropical hypersurface's combinatorial structure. Each facet of the Newton polytope corresponds to a region where a particular monomial dominates.
+
+### Tropical Curves
+
+For a bivariate tropical polynomial, the tropical curve is a **metric graph** embedded in ℝ². It satisfies the **balancing condition**: at every vertex, the sum of primitive edge directions (weighted by edge weights) is zero. This is the tropical analog of the classical curve's smoothness.
+
+### Tropical Linear Algebra
+
+A **tropical matrix** encodes a weighted directed graph. Key results:
+
+- **Tropical determinant** = max-weight perfect matching (assignment problem)
+- **Tropical eigenvalue** = maximum cycle mean = critical path length
+- **Kleene star** A* = I ⊕ A ⊕ A² ⊕ … = transitive closure (all-pairs shortest paths)
+- **Tropical matrix power** Aᵏ = k-step optimal paths
 
 ### Tropical Bézout's Theorem
 
-Two tropical curves of degrees `d₁` and `d₂` in the tropical plane intersect in exactly `d₁ · d₂` points (counted with multiplicity), mirroring the classical Bézout's theorem.
+Two tropical curves of degrees d₁ and d₂ intersect in exactly d₁ · d₂ points (counted with multiplicity), mirroring the classical Bézout theorem. This is verified by computing the **mixed volume** of their Newton polytopes.
 
-### Tropical Eigenvalue Theory
+### Agent Scheduling
 
-For a square tropical matrix `A`, the **tropical eigenvalue** `λ` satisfies:
-
-$$\max_j (A_{ij} + v_j) = \lambda + v_i \quad \text{for all } i$$
-
-This equals the **maximum cycle mean** of the associated weighted digraph, computable via Karp's algorithm or the tropical characteristic polynomial.
-
-### Tropicalization
-
-Given a classical polynomial `f = Σ c_α x^α`, its **tropicalization** is obtained by the valuation map:
-
-$$x_i \mapsto -\log_t(x_i) \quad \text{as } t \to 0$$
-
-The tropicalization `Trop(f)` records the combinatorial skeleton of the variety `{f = 0}`.
+Given a task dependency graph with durations d(i,j), the **makespan** (total completion time) equals the tropical eigenvalue of the duration matrix — the maximum cycle mean. Individual start times come from the tropical eigenvector, computed via the Kleene star.
 
 ---
 
-## Running Tests
+## Testing
 
 ```bash
 cargo test
 ```
 
-136 tests covering all modules: semiring properties, polynomial evaluation, Newton polytope geometry, curve balancing, matrix operations, scheduling, and more.
+The test suite includes **136 tests** covering:
+
+- Tropical arithmetic properties (idempotence, associativity, distributivity)
+- Polynomial evaluation, addition, and multiplication
+- Newton polytope geometry (volume, edges, containment)
+- Tropical curve balancing and genus computation
+- Tropical matrix operations (determinant, eigenvalue, Kleene star)
+- Convexity (polytope containment, distances, Minkowski sums)
+- Intersection theory (Bézout verification, stable intersection)
+- Optimization (shortest paths, assignment problems)
+- Agent scheduling (makespan, start times)
 
 ---
 
